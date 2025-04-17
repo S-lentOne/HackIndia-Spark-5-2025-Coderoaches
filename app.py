@@ -9,9 +9,12 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
+# Configuration
+MAX_CHARS = int(os.getenv('MAX_CHARS', 200))  # Default to 200 characters
+
 # Initialize RAG system
 try:
-    rag = RAGSystem()
+    rag = RAGSystem(max_chars=MAX_CHARS)
     # Try to load existing vector store
     if not rag.load_vector_store():
         logger.warning("No existing vector store found. Please run rag_setup.py first to process documents.")
@@ -31,19 +34,21 @@ def query():
     try:
         data = request.get_json()
         query_text = data.get('query', '').strip()
+        max_chars = data.get('max_chars', MAX_CHARS)  # Allow client to override max_chars
         
         if not query_text:
             return jsonify({'error': 'Please enter a query'}), 400
             
         # Get results from RAG system
-        results = rag.query(query_text, k=3)  # Get top 3 results
+        results = rag.query(query_text, k=3, max_chars=max_chars)  # Get top 3 results
         
         # Format results
         formatted_results = []
         for i, doc in enumerate(results, 1):
             formatted_results.append({
                 'id': i,
-                'content': doc.page_content,
+                'content': doc.metadata['truncated_content'],  # Use the truncated content
+                'full_content': doc.page_content,  # Include full content for reference
                 'metadata': doc.metadata
             })
             

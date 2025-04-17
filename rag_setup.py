@@ -7,11 +7,8 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 from langchain_core.documents import Document
 from datasets import load_dataset
 import os
-import sys
 import logging
-from typing import List, Dict, Any
 from dotenv import load_dotenv
-import json
 from tqdm import tqdm
 import torch
 import gc
@@ -20,19 +17,21 @@ import gc
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Load environment variables
+# Load env variables
 load_dotenv()
 
 class RAGSystem:
     def __init__(self, 
                  documents_dir="/home/Mika/Documents/HackIndia-Spark-5-2025-Coderoaches/DATA", 
                  embedding_model="sentence-transformers/all-mpnet-base-v2",
-                 vector_store_path="vector_store"):
+                 vector_store_path="vector_store",
+                 max_chars=200):  # Default to 200 characters
         self.documents_dir = documents_dir
         self.embedding_model = embedding_model
         self.embeddings = HuggingFaceEmbeddings(model_name=embedding_model)
         self.vector_store = None
         self.vector_store_path = vector_store_path
+        self.max_chars = max_chars  # Store the max_chars parameter
         
     def save_vector_store(self):
         """Save the vector store to disk"""
@@ -126,18 +125,33 @@ class RAGSystem:
             torch.cuda.empty_cache()
         gc.collect()
 
-    def query(self, question, k=4):
-        """Query the vector store for relevant documents"""
+    def query(self, question, k=4, max_chars=None):
+        """Query the vector store for relevant documents
+        
+        Args:
+            question (str): The query string
+            k (int): Number of documents to retrieve
+            max_chars (int, optional): Maximum number of characters to display per result.
+                                     If None, uses the instance's max_chars value.
+        """
         if not self.vector_store:
             raise ValueError("Vector store not initialized. Please load and process documents first.")
         
         retriever = self.vector_store.as_retriever(search_kwargs={"k": k})
         docs = retriever.get_relevant_documents(question)
+        
+        # Use provided max_chars or fall back to instance value
+        display_chars = max_chars if max_chars is not None else self.max_chars
+        
+        # Add truncated content to metadata for easy access
+        for doc in docs:
+            doc.metadata['truncated_content'] = doc.page_content[:display_chars] + "..." if len(doc.page_content) > display_chars else doc.page_content
+            
         return docs
 
 def main():
-    # Initialize RAG system
-    rag = RAGSystem()
+    # Initialize RAG system with custom max_chars
+    rag = RAGSystem(max_chars=300)  # Example: show 300 characters per result
     
     # Try to load existing vector store
     if rag.load_vector_store():
@@ -191,11 +205,12 @@ def main():
                 break
                 
             print(f"\nQuerying: {question}")
-            results = rag.query(question)
+            # You can override max_chars per query if needed
+            results = rag.query(question, max_chars=rag.max_chars)
             print("\nTop results:")
             for i, doc in enumerate(results, 1):
                 print(f"\nResult {i}:")
-                print(doc.page_content[:200] + "...")  # Print first 200 chars
+                print(doc.metadata['truncated_content'])
         except Exception as e:
             print(f"Error during query: {e}")
             continue
