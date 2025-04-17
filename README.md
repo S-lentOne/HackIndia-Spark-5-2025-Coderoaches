@@ -51,8 +51,8 @@ R.AI addresses critical challenges in research:
 
 1. Clone the repository:
 ```bash
-git clone <repository-url>
-cd <repository-name>
+git clone https://github.com/S-lentOne/HackIndia-Spark-5-2025-Coderoaches.git
+cd HackIndia-Spark-5-2025-Coderoaches/
 ```
 
 2. Create and activate virtual environment:
